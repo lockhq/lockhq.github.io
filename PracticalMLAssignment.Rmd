@@ -1,0 +1,105 @@
+---
+title: "Predicting Exercise Manners through Data Analytics"
+author: "Lock Hong Quan"
+date: "22 May 2018"
+output: html_document
+---
+
+###Executive Summary
+
+Micro-level data from personal health devices, such as the acceleration of the arm or the angle of the motion, can help determine if a person is performing a particular exercise properly. Using a large dataset of approximately 20,000 records and 150 variables, we are able to build a data analytics model to gauge how well a person is doing the particular exercise. The Random Forest is identified as the model with the highest predictive accuracy of ____%, and is recommended for deployment. 
+
+###Exploratory Data Analysis and Data Cleaning
+
+We load the training set data from the website. As we can see from a truncated set of columns from the first data entry, there are many empty fields and NA fields. For ease, we will set all fields with no data (be it empty, NA etc.) as NA fields
+```{r echo=FALSE}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+              destfile = "./training-set.csv", method = "curl")
+
+Training_Set <- read.csv("./training-set.csv")
+head(Training_Set,1)[,10:20]
+```
+Set all empty fields as NA fields. We 
+```{r echo=FALSE}
+# Load Training Set, set certain things as NA
+Training_Set <- read.csv("./training-set.csv", na.strings=c("NA","#DIV/0!",""))
+head(Training_Set,1)[,10:20]
+```
+
+```{r}
+dim(Training_Set)
+```
+As variables with almost all the fields as NA are not meaningful predictors (and cannot be salvaged with replacement), we remove them from the data set. We note above that prior to removal, there were 160 columns in the dataset. Once the variables that are mostly NA are removed, we are only left with 60 columns
+```{r}
+#We sum within each column, the number of NA values. We set a 10% allowance (for columns where there are only a few NA fields), and exclude columns which contains largely NA values.
+Training_Set_No_NA <- Training_Set[ , colSums(is.na(Training_Set)) < 2000]
+dim(Training_Set_No_NA)
+```
+Furthermore variables with very low variance are not meaningful predictors (In this case, the new_window variable was removed as 97% of the entries had the same value of no. We are left with 59 columns. 
+```{r message=FALSE}
+library(caret)
+
+placeholder <- nearZeroVar(Training_Set_No_NA)
+Revised_Training_Set <- Training_Set_No_NA[, -placeholder]
+dim(Revised_Training_Set)
+```
+Finally, we see that the first six variables are not predictors, but identifiers (e.g. identifying the time of the trial). These can hence be removed. 
+```{r echo=FALSE}
+head(Revised_Training_Set,1)[,1:8]
+Final_Training_Set<-Revised_Training_Set[,-c(1:6)]
+```
+With a clean dataset, we can start on proper machine learning. After loading the caret package, We set a seed to ensure consistency of results, and split the training set into two parts -- 70% for model building (termed the Modelling Set) and 30% to validate the results (termed the Validation Set). The variable "classe" is what the model aims to predict
+```{r}
+library(caret)
+set.seed(12345)
+modeller <- createDataPartition(Final_Training_Set$classe, p=0.7, list=FALSE)
+Modelling_Set <- Final_Training_Set[modeller,]
+Validation_Set <- Final_Training_Set[-modeller,]
+
+dim(Final_Training_Set)
+dim(Modelling_Set)
+dim(Validation_Set)
+head(Final_Training_Set,1)
+```
+
+We will use 3 different methods, decision tree, random forest and K-Nearest Neighbours We would focus on comparing the summary statistics (specifically the accuracy) of each of the models.
+
+####Decision Tree (C5.0)
+```{r echo=FALSE, message=FALSE}
+library(C50)
+CART_Fit<-train(classe~.,data=Modelling_Set,method="C5.0")
+CART_predictions<-predict(CART_Fit,newdata=Validation_Set)
+confusionMatrix(CART_predictions,Validation_Set$classe)
+```
+
+####Random Forest
+```{r echo=FALSE, message=FALSE}
+library(randomForest)
+Forest_Fit<-train(classe~.,data=Modelling_Set,method="rf",ntrees=5)
+Forest_predictions<-predict(Forest_Fit,newdata=Validation_Set)
+confusionMatrix(Forest_predictions,Validation_Set$classe)
+```
+
+####K-Nearest Neighbors
+```{r echo=FALSE, message=FALSE}
+KNN_Fit<-train(classe~.,data=Modelling_Set,method="knn")
+KNN_predictions<-predict(KNN_Fit,newdata=Validation_Set)
+confusionMatrix(KNN_predictions,Validation_Set$classe)
+```
+
+
+We find that both C5.0 and the Random Forest algorithms are preferable, achieveing an accuracy rate of 98% - 99%. We hence apply both algorithms to the 20 examples required in the Final Data Set, and note that they yield the same predictions. These will be submitted to Coursera
+
+####Predictions of Final Data Set under C5.0
+```{r echo=FALSE, message=FALSE}
+Final_Set<-read.csv("pml-testing.csv")
+Final_Predictions<-predict(CART_Fit,newdata=Final_Set)
+Final_Predictions
+```
+
+####Predictions of Final Data Set under Random Forest
+```{r echo=FALSE, message=FALSE}
+Final_Set2<-read.csv("pml-testing.csv")
+Final_Predictions<-predict(Forest_Fit,newdata=Final_Set2)
+Final_Predictions
+```
